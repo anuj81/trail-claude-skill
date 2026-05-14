@@ -6,10 +6,7 @@ when_to_use: |
   "resumable", "auditable", "large refactor", "architecture change",
   "phased implementation", or when the user opens any file under .trail/.
   Skip typo fixes, one-line patches, and isolated bug fixes.
-effort: high
-paths:
-  - .trail/**
-allowed-tools: Bash(git status *) Bash(git log *) Bash(git diff *) Bash(git show *) Bash(git tag -l*) Bash(git tag -n*) Bash(git branch --show-current) Bash(git branch -l*) Bash(git rev-parse *) Bash(git for-each-ref *) Bash(git rev-list *) Bash(python3 *trail/scripts/*) Read Write(/tmp/trail-*) Grep Glob
+allowed-tools: Bash(git status *) Bash(git log *) Bash(git diff *) Bash(git show *) Bash(git tag -l*) Bash(git tag -n*) Bash(git branch --show-current) Bash(git branch -l*) Bash(git rev-parse *) Bash(git for-each-ref *) Bash(git rev-list *) Bash(python3 *trail/scripts/*) Bash(cat *) Bash(head *) Read Write(/tmp/trail-*) Grep Glob
 ---
 
 # Trail
@@ -21,8 +18,9 @@ are intentionally NOT pre-approved. Confirm with the user before each.
 
 - Branch + worktree: !`git status --short --branch 2>/dev/null || echo '(not a git repo)'`
 - Recent commits: !`git log --oneline -n 10 2>/dev/null || echo '(no commits)'`
-- Phase tags: !`git tag -l 'phase/*' --sort=-taggerdate 2>/dev/null | head -20 || true`
-- Trail snapshot: !`python3 ${CLAUDE_SKILL_DIR}/scripts/trace_status.py . 2>/dev/null || true`
+- Phase tags: !`git tag -l 'phase/*' --sort=-version:refname 2>/dev/null | head -20 || true`
+- NEXT.md: !`cat .trail/NEXT.md 2>/dev/null || true`
+- Plan (first 40 lines): !`head -40 .trail/plan.md 2>/dev/null || true`
 
 ## Dispatch
 

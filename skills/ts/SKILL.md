@@ -20,7 +20,7 @@ allowed-tools: Bash(git status *) Bash(git tag -l*) Bash(git tag -n*) Bash(git s
 
 ## Latest capsule
 
-!`LATEST=$(git tag -l 'phase/*' --sort=-version:refname --format='%(refname:short)' 2>/dev/null | head -1); if [ -n "$LATEST" ]; then echo "=== $LATEST ==="; git for-each-ref "refs/tags/$LATEST" --format='%(contents)'; else echo '(no phase tags yet)'; fi`
+!`git for-each-ref 'refs/tags/phase/*' --sort=-version:refname --count=1 --format='=== %(refname:short) ===%0a%(contents)' 2>/dev/null || echo '(no phase tags yet)'`
 
 ## NEXT.md
 

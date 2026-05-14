@@ -1,61 +1,59 @@
-# Trail — phased implementation discipline for Claude Code
+# Trail — phased implementation for Claude Code
 
-Trail makes long implementations recoverable by leaving the repo with a
-durable, structured trail of decisions and phase boundaries — so any
-future session, agent, or teammate can rejoin without re-deriving why
-things are the way they are.
+Trail breaks large implementations into traceable phases on a feature branch.
+Each phase ends with a **capsule** — a structured decision log stored in a git tag annotation.
+Any future session, agent, or teammate can rejoin at any phase without re-deriving why things are the way they are.
 
-Sibling to [trail-codex-skill](https://github.com/anuj81/trail-codex-skill);
-shares the methodology, rebuilt around Claude Code's skill model with
-tag-based capsules, dynamic context injection, opt-in hook enforcement,
-and an independent audit subagent.
+Sibling to [trail-codex-skill](https://github.com/anuj81/trail-codex-skill); same methodology, rebuilt around Claude Code's skill model.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A(["/trail plan"]) --> B["Create claude/&lt;slug&gt; branch\nWrite .trail/plan.md"]
+    B --> C(["/trail phase N"])
+    C --> D["Classify risk\nMicro-commits during work"]
+    D --> E(["/trail commit"])
+    E --> F["Run validation\nWrite capsule\nUpdate .trail/NEXT.md\ngit tag -a phase/&lt;slug&gt;-N -F /tmp/trail-capsule.txt"]
+    F --> G{Every 3rd phase\nor risk upgrade?}
+    G -- yes --> H(["/trail audit\n(independent Plan subagent)"])
+    H --> I{More phases?}
+    G -- no --> I
+    I -- yes --> C
+    I -- no --> J(["/trail finalize\nPR body from tag annotations"])
+
+    style A fill:#e8f4e8
+    style C fill:#e8f4e8
+    style E fill:#e8f4e8
+    style H fill:#fff3cd
+    style J fill:#e8f4e8
+```
+
+**Key artifacts:**
+
+| Artifact | Where | Survives merge to main? |
+|---|---|---|
+| Phase capsule | git tag annotation (`phase/<slug>-N`) | Yes — tags travel with commits |
+| Micro-commits | branch history | Yes |
+| NEXT.md | `.trail/NEXT.md` (gitignored) | No — branch-local only |
+| Trace plan | `.trail/plan.md` (gitignored) | No — branch-local only |
+
+---
 
 ## Quick start
 
 ```
-/trail plan          → write the trace plan in plan mode, sign off, scaffold branch
-/trail phase <N>     → start phase N (risk-classified, TaskCreate-backed)
-/trail commit        → close phase: validate → capsule → tag → update NEXT.md
-/trail audit         → independent Plan-subagent review (auto-required after N%3==0)
-/trail finalize      → prepare for merge: gap-check phases, generate PR body
-/ts                  → show current state (read-only, instant)
+/trail plan          → write the trace plan, approve, scaffold branch
+/trail phase <N>     → start phase N (risk check + tasks + micro-commits)
+/trail commit        → close phase: validate → capsule → tag → NEXT.md
+/trail audit         → independent review (auto-required every 3rd phase)
+/trail finalize      → PR body from tag annotations, ready for merge
+/ts                  → read-only status check (instant, use freely)
 ```
 
-## What Trail does
-
-Implementations larger than a few hours have predictable failure modes:
-plans drift from execution, validation gets skipped under pressure, the
-implementation log lies once it's no longer being honestly maintained,
-and context compaction destroys the reasoning that made the code make
-sense. Trail addresses each of these structurally rather than relying on
-discipline alone:
-
-- **Feature-branch + micro-commits.** Work happens on
-  `claude/<feature-slug>`. Inside a phase, commit freely with meaningful
-  messages — these are the bisect targets and the safety net against
-  mid-phase loss.
-- **Tag-based phase boundaries.** Each phase ends with
-  `git tag -a phase/<feature-slug>-N -F /tmp/trail-capsule.txt`. The
-  capsule lives in the tag annotation: immutable, atomic with the code
-  state it describes, visible in `git show` and GitHub.
-- **Live handoff in `.trail/NEXT.md`.** Editable mid-phase so you can
-  leave a marker before walking away. `.trail/` is in `.gitignore`;
-  feature-branch commits use `git add -f` (Trail commands handle this
-  automatically). On merge to main, `.trail/` doesn't follow.
-- **Risk-graduated discipline.** Each phase is classified low/medium/high
-  at plan time and re-classified at start. High risk requires `/review`
-  and (if it touches auth/secrets/deps) `/security-review` before tag.
-  Re-classification is upgrade-only — risk ratchets, never relaxes.
-- **Plan amendment ritual.** Every capsule includes a one-line answer to
-  "are remaining phases still right?" Forces re-planning to be a
-  deliberate act, not a silent drift.
-- **Mechanically enforced audit at every 3rd phase.** A forked Plan
-  subagent reviews plan-vs-reality using tag annotations only.
-  `/trail commit` writes a `.trail/audit-required-N.flag` file; the
-  guard-tag hook blocks the next phase tag until `/trail audit` clears
-  the flag. The cadence isn't optional.
-- **Post-compaction recovery.** Source of truth is git tags + NEXT.md +
-  plan.md, in that order. The chat transcript is not trusted.
+---
 
 ## Install
 
@@ -63,59 +61,130 @@ discipline alone:
 git clone https://github.com/anuj81/trail-claude-skill.git
 cd trail-claude-skill
 
-# Personal install (recommended)
 mkdir -p ~/.claude/skills
 cp -R skills/trail ~/.claude/skills/
-cp -R skills/ts ~/.claude/skills/
+cp -R skills/ts   ~/.claude/skills/
+```
 
-# Or symlink to track upstream:
+Or symlink to track updates:
+```bash
 ln -s "$(pwd)/skills/trail" ~/.claude/skills/trail
 ln -s "$(pwd)/skills/ts"    ~/.claude/skills/ts
 ```
 
-`references/` lives inside `skills/trail/`, so the copy above includes
-everything Claude needs. For project-only install, use `.claude/skills/`
-in the project root instead.
+`references/` and `scripts/` live inside `skills/trail/`, so the copy includes everything.
 
-Add `.trail/` to your project's `.gitignore` so plan/NEXT files stay on
-feature branches and don't merge to main:
-
+**Add `.trail/` to your project's `.gitignore`:**
 ```bash
 echo ".trail/" >> .gitignore
 ```
+Trail uses `git add -f` to commit plan and NEXT files on the feature branch despite the gitignore. On merge to main, `.trail/` doesn't follow — the capsules in tag annotations are the durable record.
 
-(Trail commands use `git add -f` to commit `.trail/plan.md` and
-`.trail/NEXT.md` on the feature branch despite the gitignore. This is
-the standard pattern for branch-local working files.)
-
-Verify:
-
+**Verify:**
 ```
 claude
 > /ts
 ```
+Should show "(no phase tags yet)" in a fresh repo, or live phase state in a Trail-managed one.
 
-Should print "(no phase tags yet)" / "(no .trail/NEXT.md on this branch)"
-in a non-Trail repo, or actual state in a Trail-managed one.
+---
 
-## Permissions & trust
+## Opt-in hooks
 
-Default `allowed-tools` in `/trail` cover read-only git inspection,
-script execution under the skill's `scripts/` directory, `Read`/`Grep`/`Glob`,
-and `Write` scoped to `/tmp/trail-*` (for capsule and audit-prompt files).
-**No mutating git operations are pre-approved.** Branch creation, commits,
-tags, and resets all prompt for permission per use.
+Two hooks deepen Trail's enforcement. They're opt-in because **hooks are functionally equivalent to `allowed-tools`** — the scripts run on every matching tool call. Review `skills/trail/scripts/` before installing.
 
-This is deliberate: silent execution of `git tag` or `git reset` against
-your repo is exactly the kind of "I didn't realize Claude could do that"
-surprise that erodes trust. Trade-off is one extra approval click per
-mutation. Worth it.
+Install by merging `hooks/settings.snippet.json` into `~/.claude/settings.json` (see `hooks/README.md`).
 
-If you want lower friction after you've audited the skill, paste a
-permissions snippet into `~/.claude/settings.json` (or project
-`.claude/settings.json` for per-repo scope):
+### `guard-tag` — PreToolUse on Bash
 
-```jsonc
+Blocks `git tag phase/*` when any of these fail:
+
+- Tag name doesn't follow `phase/<feature-slug>-N` (or `-attempt-K` suffix)
+- Capsule annotation is missing required sections for the phase's risk level
+- Annotation uses `-m "$(cat ...)"` — hooks see the shell command **before** evaluation, so command substitution arrives as literal text; use `-F /path/to/file` instead
+- `.trail/NEXT.md` doesn't reference the next phase number (or "final"/"finalize"/"merge" for the last phase)
+- A prior phase has a pending audit flag
+
+Silent on every other Bash call. Set `TRAIL_HOOK_DEBUG=1` before launching Claude to log raw hook payloads to stderr.
+
+### `Stop` — trace_status
+
+Prints Trail state at session end as a safety net for context loss.
+Self-suppresses on non-Trail repos.
+
+---
+
+## Phase discipline
+
+### Risk classification
+
+Run automatically at phase start via `phase_check.py classify-risk`:
+
+| Risk | Signal |
+|---|---|
+| **High** | Path matches `auth`, `secret`, `credential`, `migration`, `schema`, `crypto` — or sits under `migrations/`, `db/`, `schemas/` |
+| **Medium** | Path touched by ≥ 3 distinct authors in last 7 days |
+| **Low** | Everything else |
+
+Risk ratchets up, never down. If a planned-low phase looks high at start, upgrade and tell the user.
+
+High-risk phases require `/review` (and `/security-review` if auth/secrets are involved) before tagging.
+
+### Capsule format
+
+Each phase tag holds a structured capsule in its annotation. Required sections for all phases:
+
+```
+Implementation:    What was built
+Decisions:         Why this approach
+Rejected:          Alternatives considered and dropped
+Validation:        Commands run and their output
+Risks / follow-ups: Known issues or open questions
+Plan amendment:    Are remaining phases still correct?
+Next:              What phase N+1 should start with
+```
+
+Medium/high risk also require:
+```
+Mental model:              Key invariants a reader needs to hold
+Investigated and parked:   Things explored but not acted on
+```
+
+See `skills/trail/references/templates.md` for full templates.
+
+### Audit cadence
+
+After every 3rd phase (N % 3 == 0) and on any risk upgrade, `/trail commit` writes `.trail/audit-required-N.flag`. The `guard-tag` hook blocks the next phase tag until `/trail audit` clears it.
+
+`/trail audit` forks a Plan subagent that reads the trace plan + all tag annotations and reports on plan-vs-reality. The subagent sees only tag annotations, never diffs — keeping review cost bounded regardless of codebase size.
+
+---
+
+## Sub-commands reference
+
+| Command | What it does |
+|---|---|
+| `/trail plan` | Write trace plan in plan mode; user approves; scaffold branch + first commit |
+| `/trail phase <N>` | Start phase N: risk classify, TaskCreate, implement with micro-commits |
+| `/trail commit` | Close phase: validate → capsule → NEXT.md → `git tag -a ... -F /tmp/trail-capsule.txt` |
+| `/trail audit` | Fork Plan subagent for independent review; clear audit flag on completion |
+| `/trail finalize` | Gap-check phase sequence; generate PR description from tag annotations |
+| `/trail resume` | Rejoin from current state (reads NEXT.md + latest tag) |
+| `/trail capsule [N]` | Show tag annotation for phase N (latest if omitted) |
+| `/trail rollback <N>` | Guided rollback: soft / revert / hard reset with trade-off explanation |
+| `/ts` | Read-only status: branch, phase tags, latest capsule, NEXT.md, plan |
+
+`/ts` is a separate skill (not `/trail status`) so it stays instant and one keystroke. If it collides with a future built-in `ts` skill, rename the directory: `mv ~/.claude/skills/ts ~/.claude/skills/trail-status`.
+
+---
+
+## Permissions
+
+No mutating git operations are pre-approved. Branch creation, commits, tags, and resets all prompt for confirmation. This is deliberate — silent `git tag` or `git reset` is exactly the kind of surprise that erodes trust.
+
+For lower friction after you've audited the skill, add to `~/.claude/settings.json`:
+
+```json
 {
   "permissions": {
     "allow": [
@@ -128,146 +197,51 @@ permissions snippet into `~/.claude/settings.json` (or project
 }
 ```
 
-## Opt-in hooks
-
-Two hooks deepen Trail's discipline. They're shipped as a snippet, not
-auto-installed, because **opt-in hooks are functionally equivalent to
-`allowed-tools` from a trust perspective** — you're granting the script
-permission to execute on every matching tool call. Review the script
-sources under `skills/trail/scripts/` before installing.
-
-### `guard-tag` (PreToolUse on Bash)
-
-Blocks `git tag phase/*` when:
-
-- the tag name doesn't follow `phase/<feature-slug>-N[-attempt-K]`
-- the annotation message is missing required capsule sections for the
-  declared risk level
-- the message uses `-m "$(cat ...)"` (which arrives at the hook as
-  unevaluated literal text — use `-F /path/to/file` instead)
-- `.trail/NEXT.md` exists but doesn't reference the next phase
-- a prior phase has a pending `audit-required-*.flag` file
-
-Silent on every other Bash invocation. Set `TRAIL_HOOK_DEBUG=1` in your
-environment to log raw hook payloads to stderr if the hook seems silent
-when you expected it to fire.
-
-### `Stop` trace_status
-
-Prints current Trail state at session end as a safety net for context
-loss. Self-suppresses on non-Trail repos so non-Trail sessions stay quiet.
-
-Install both by merging `hooks/settings.snippet.json` into your
-`~/.claude/settings.json`. The snippet uses `$HOME` for portability; if
-your hook runner doesn't expand environment variables, replace with the
-absolute path to your home directory.
-
-## Sub-commands
-
-| Command | Purpose |
-|---|---|
-| `/trail plan` | New feature: write trace plan in plan mode, sign off, scaffold branch |
-| `/trail phase <N>` | Start phase N: classify risk, create tasks, implement with micro-commits |
-| `/trail commit` | Close phase: run validation, compose capsule, update NEXT.md, tag |
-| `/trail audit` | Independent Plan-subagent review (required after every 3rd phase + on risk upgrade) |
-| `/trail finalize` | Prepare for merge: phase-count gap check, generate PR body from tags |
-| `/trail resume` | Continue from current state (reads NEXT.md + latest tag) |
-| `/trail capsule [N]` | Show tag annotation for phase N (latest if omitted) |
-| `/trail rollback <N>` | Guided rollback walking through soft/medium/hard options |
-| `/ts` | Read-only status: phase tags, latest capsule, NEXT.md, branch state |
-
-`/ts` is its own skill rather than `/trail status` because it's used many
-times per session and deserves the shorter command.
-
-**Name-collision note:** `/ts` is a very short slash command. If a future
-Claude Code release ships a bundled skill named `ts` (TypeScript helper,
-say), it will shadow this one. Rename to `/trail-status` if you'd rather
-own the namespace yourself — just rename the directory after copying:
-`mv ~/.claude/skills/ts ~/.claude/skills/trail-status`.
-
-## Risk classification
-
-Cheap signals run at phase start via `phase_check.py classify-risk`:
-
-- **High** if any path matches `auth|secret|credential|migration|schema|crypto` or sits under `migrations/`, `db/`, `schemas/`
-- **Medium** if any path was touched by ≥3 distinct authors in the last 7 days
-- **Low** otherwise
-
-Re-classification is upgrade-only — if signals say a planned-low phase is
-actually high, upgrade and tell the user. Never silently relax.
+---
 
 ## Recovery
 
-Things go wrong. `skills/trail/references/recovery.md` covers:
+`skills/trail/references/recovery.md` covers:
 
-- Resuming after compaction or in a new session
+- Resuming after context compaction or in a new session
 - Three rollback options (branch-from-tag, revert, hard reset)
-- Recording a failed phase as a permanent attempt tag
-- Recovering when `.trail/NEXT.md` is missing
-- Handling guard-tag blocks (including the audit-flag block)
-- Reconciling when the transcript and the repo disagree (repo always wins)
+- Recording a failed phase as a permanent attempt tag (`phase/<slug>-N-attempt-K`)
+- Recovering a missing `.trail/NEXT.md`
+- Understanding guard-tag block messages
+- Reconciling when transcript and repo disagree (repo always wins)
 
-## Differences vs the codex sibling
-
-Same methodology, redesigned around Claude Code:
-
-- Capsule lives in the **git tag annotation** instead of a markdown log
-  file → atomic with code state, no drift, no file to clean up
-- Phase boundaries are **annotated tags** instead of squash commits →
-  micro-commits preserved for bisect
-- **Two skills** (`/trail` + `/ts`) instead of resume commands inside one
-  workflow doc → status gets its own one-key entry
-- **Risk-graduated discipline** with classify-risk script driving M+
-  section requirements → not all phases pay the full ritual cost
-- **Mechanically enforced audit** every 3rd phase via audit-required
-  flag file + guard-tag check → cadence isn't optional, not just prose
-- **Opt-in hooks** for guard-tag + Stop trace_status → mechanical
-  enforcement layered on top of prose discipline
-- **Dynamic context injection** in SKILL.md → skill loads with live repo
-  state, no negotiation
-- Branch prefix `claude/<slug>`, tag namespace `phase/<slug>-N`
-
-The codex version is simpler. If you don't need the audit/risk/hook
-layers, that version is a fine choice and the methodology transfers.
+---
 
 ## Limitations
 
-- Requires git. Tags are the spine; non-git VCS is out of scope.
-- Phase tag namespace can collide across teammates if you push and two
-  developers both tag `phase/add-export-1`. Slug discrimination
-  (`phase/<feature-slug>-N`) makes collision unlikely but not impossible
-  on parallel features.
-- `guard-tag` checks capsule structure, not truth. Validation results
-  can be faked by typing them into the capsule without running the
-  commands. For high-stakes work, configure CI to re-run validation
-  against each `phase/*` tag.
-- Skill content stays in context across the session. `/trail` is heavy;
-  if you're not actively using it, use `/ts` for status checks instead.
+- Requires git. Tags are the spine of the system.
+- Phase tag namespace can collide if two developers both push `phase/add-export-1` on parallel branches. Slug discrimination makes this unlikely but not impossible.
+- `guard-tag` checks capsule structure, not truth. Validation results can be fabricated. For high-stakes work, configure CI to re-run validation against each `phase/*` tag.
+- `/trail` is context-heavy. Use `/ts` for status checks during active sessions.
 
-## Validation
+---
 
-Smoke-test the scripts against any git repo (including this one):
+## Smoke tests
 
 ```bash
 # trace_status self-suppresses on non-Trail repos
 python3 skills/trail/scripts/trace_status.py .
 
-# Namespace enforcement
+# Namespace enforcement (exit 0 = ok, exit 2 = blocked)
 python3 skills/trail/scripts/phase_check.py enforce-namespace phase/add-export-1   # ok
-python3 skills/trail/scripts/phase_check.py enforce-namespace phase/BAD_NAME       # exit 1
+python3 skills/trail/scripts/phase_check.py enforce-namespace phase/BAD_NAME       # exit 2
 
 # Risk classification
 python3 skills/trail/scripts/phase_check.py classify-risk src/auth/middleware.ts   # high
 python3 skills/trail/scripts/phase_check.py classify-risk src/components/Btn.tsx   # low
 
-# Audit-flag lifecycle (run inside a git repo)
+# Audit flag lifecycle (run inside a git repo with .trail/ directory)
 python3 skills/trail/scripts/phase_check.py mark-audit-required 3
 ls .trail/audit-required-3.flag
 python3 skills/trail/scripts/phase_check.py clear-audit-flags
-
-# Audit prompt generation (requires .trail/plan.md to exist)
-python3 skills/trail/scripts/phase_check.py build-audit-prompt
 ```
+
+---
 
 ## License
 

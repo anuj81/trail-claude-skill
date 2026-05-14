@@ -16,7 +16,8 @@ Sub-commands:
                         stdout, ready to feed to a forked Plan subagent.
 
 guard-tag is silent for any tool call that is not a phase tag creation.
-Exits 1 with a stderr message if the tag should be blocked.
+Exits 2 with a stderr message if the tag should be blocked (exit 2 = blocking
+in Claude Code hooks; exit 1 = non-blocking warning that Claude ignores).
 
 Debug: set TRAIL_HOOK_DEBUG=1 to print the raw hook payload to stderr.
 """
@@ -244,7 +245,7 @@ def cmd_guard_tag() -> int:
     err = enforce_namespace(tag_name)
     if err:
         print(f"Trail guard-tag: {err}", file=sys.stderr)
-        return 1
+        return 2
 
     if not message:
         print(
@@ -254,7 +255,7 @@ def cmd_guard_tag() -> int:
             "references/templates.md.",
             file=sys.stderr,
         )
-        return 1
+        return 2
 
     # Detect the -m "$(cat ...)" anti-pattern. Hooks see the unevaluated shell
     # command, so command substitution arrives as literal text. Give a
@@ -267,7 +268,7 @@ def cmd_guard_tag() -> int:
             "-F /path/to/capsule.txt instead.",
             file=sys.stderr,
         )
-        return 1
+        return 2
 
     risk = "high"  # Default to strictest until we find a Risk: line.
     m = re.search(r"^Risk:\s*(low|medium|high)\s*$", message, re.M | re.I)
@@ -281,7 +282,7 @@ def cmd_guard_tag() -> int:
             f"risk={risk}: {', '.join(missing)}. See references/templates.md.",
             file=sys.stderr,
         )
-        return 1
+        return 2
 
     # NEXT.md freshness: best-effort check that NEXT references the next
     # phase number. Skipped if NEXT.md is absent.
@@ -296,13 +297,16 @@ def cmd_guard_tag() -> int:
             text = next_path.read_text(errors="replace").lower()
             wanted_tag = f"phase/{slug}-{next_n}".lower()
             wanted_words = f"phase {next_n}"
-            if wanted_tag not in text and wanted_words not in text:
+            final_markers = ("final", "finalize", "merge", "no more phase", "last phase")
+            is_final = any(m in text for m in final_markers)
+            if wanted_tag not in text and wanted_words not in text and not is_final:
                 print(
                     f"Trail guard-tag: .trail/NEXT.md does not reference "
-                    f"phase {next_n}. Update NEXT.md before tagging phase {n}.",
+                    f"phase {next_n}. Update NEXT.md before tagging phase {n}, "
+                    f"or include 'final'/'finalize'/'merge' if this is the last phase.",
                     file=sys.stderr,
                 )
-                return 1
+                return 2
 
     # Audit-required flag check: block if a prior phase still has a pending
     # audit. /trail audit clears the flag after writing findings to NEXT.md.
@@ -315,7 +319,7 @@ def cmd_guard_tag() -> int:
             "flag file(s) under .trail/ if you intentionally want to skip.",
             file=sys.stderr,
         )
-        return 1
+        return 2
 
     return 0
 
