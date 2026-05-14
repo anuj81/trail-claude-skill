@@ -1,0 +1,45 @@
+{
+  "//": "Trail opt-in hooks. Review before pasting into ~/.claude/settings.json.",
+  "//1": "PreToolUse guard-tag: blocks `git tag phase/*` when the capsule",
+  "//2": "annotation is incomplete for the phase's declared risk level, when",
+  "//3": "the tag name doesn't follow phase/<feature-slug>-N, or when a prior",
+  "//4": "phase's audit is still pending. Silent on every other Bash invocation.",
+  "//5": "",
+  "//6": "Stop trace_status: prints current Trail state at session end. The",
+  "//7": "script self-suppresses on non-Trail repos so non-Trail sessions stay quiet.",
+  "//8": "",
+  "//9": "Paths use $HOME (not ~) for portability across hook runners that",
+  "//10": "may not perform tilde expansion. If your runner doesn't expand $HOME",
+  "//11": "either, replace with the absolute path to your home directory.",
+  "//12": "",
+  "//13": "Debug: set TRAIL_HOOK_DEBUG=1 in the environment to log raw hook",
+  "//14": "payloads to stderr — useful if the hook seems silent when it shouldn't be.",
+  "//15": "",
+  "//16": "Trust note: opt-in hooks are functionally equivalent to allowed-tools",
+  "//17": "from a trust perspective. You are granting these scripts permission to",
+  "//18": "execute on every matching tool call. Review the script source under",
+  "//19": "~/.claude/skills/trail/scripts/ before installing.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/skills/trail/scripts/phase_check.py guard-tag"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 $HOME/.claude/skills/trail/scripts/trace_status.py ."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+$ git show phase/add-export-1 --no-patch --format='%(contents)'
+
+phase 1: add-export
+
+Risk: low
+
+Implementation:
+  Added export request type (ExportRequest) and serializer
+  (serializeExport) in src/domain/export/. Serializer takes a Project +
+  Task[] and returns the canonical export payload. 4 focused tests
+  cover empty project, single task, multi-task with nesting, and
+  unicode field values.
+
+Decisions:
+  - Serialization lives in the domain layer, not the API layer: the
+    same shape will be reused by a future CLI export tool, so isolating
+    it from HTTP concerns now avoids refactoring later.
+  - Output is JSON, not CSV: product confirmed exports are downstream
+    consumed by another internal service. CSV can be a transformer in
+    a later phase if a human-readable target emerges.
+
+Rejected:
+  - Generate export at request time inside the API handler: rejected
+    because phase 2 (API) and a future CLI would both have to call the
+    same logic; better to centralize now.
+  - Stream output as NDJSON: rejected for v1 to keep the schema simple;
+    revisit if export size becomes a memory issue (parked, see below).
+
+Validation:
+  - npm test -- export: 4 passed, 0 failed (0.42s)
+
+Risks / follow-ups:
+  - Large project exports (>10k tasks) may exceed memory; not measured
+    yet. Follow-up: load-test in phase 2 with a synthetic large project
+    before declaring API ready.
+
+Plan amendment:
+  - Remaining phases (API + UI) still correct as planned; no scope
+    change needed based on phase 1.
+
+Next:
+  - Begin phase 2 by reading src/api/middleware/rbac.ts and confirming
+    RBAC pattern, then wire the route to call serializeExport().
