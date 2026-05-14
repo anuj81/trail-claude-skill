@@ -8,9 +8,9 @@
 
 ## The problem
 
-AI-assisted coding sessions are stateless by nature. Context windows compress, sessions end, new agents start cold. Each restart, the *why* behind decisions — the alternatives considered, the risks accepted, the validation done — has to be re-derived from code and comments that were never written to carry that weight.
+While building [Eunomia](https://eunomiaai.github.io/) — an open-source AI governance framework — with Claude Code across multiple sessions and contributors, a pattern kept repeating: the *why* behind decisions would vanish between sessions. Context windows compressed, new sessions started cold, and every restart meant re-deriving what had already been decided: the alternatives considered, the risks accepted, the validation done.
 
-For a one-hour task this barely matters. For anything that spans multiple sessions, phases, or contributors, it compounds into drift: plans diverge from execution, validation gets skipped under pressure, and the next agent (or teammate) has no reliable way to know what state the work is actually in.
+For a one-hour task this barely matters. For a project that spans weeks, multiple contributors, and dozens of AI-assisted sessions, it compounds into drift: plans diverge from execution, validation gets skipped under pressure, and the next agent (or teammate) has no reliable way to know what state the work is actually in.
 
 **Trail treats the git repo as the durable memory.** Every phase boundary produces a structured decision capsule stored in a git tag annotation — immutable, atomic with the code state it describes, readable by any future session without the chat transcript.
 
